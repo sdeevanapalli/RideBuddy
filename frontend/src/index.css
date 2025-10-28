@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Leaflet defaults */
+@import 'leaflet/dist/leaflet.css';
+
+html,body,#root { height: 100%; }
+body { @apply bg-gray-50 }
