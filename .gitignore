@@ -9,3 +9,4 @@ dist/
 
 /backend/.env
 /frontend/.env
+/backend/data/

@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { useAuth } from '../context/AuthContext'
 
 const savedKey = 'ridebuddy_saved_routes'
 
 export default function MapView() {
+  const { isAuthenticated } = useAuth()
   const mapRef = useRef(null)
   const mapElRef = useRef(null)
   const [segments, setSegments] = useState([])
@@ -29,7 +31,14 @@ export default function MapView() {
   async function findRoutes() {
     const bounds = getBoundsString()
     if (!bounds) return
-    const resp = await fetch(`/api/segments?bounds=${encodeURIComponent(bounds)}`)
+
+    const headers = {}
+    const jwt = localStorage.getItem('jwt')
+    if (jwt) {
+      headers['Authorization'] = `Bearer ${jwt}`
+    }
+
+    const resp = await fetch(`/api/segments?bounds=${encodeURIComponent(bounds)}`, { headers })
     if (!resp.ok) {
       const text = await resp.text()
       alert('Error fetching segments: ' + text)

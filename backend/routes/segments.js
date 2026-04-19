@@ -1,18 +1,32 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const { refreshTokenIfNeeded } = require('../lib/strava')
+const { refreshUserToken, verifyJWT } = require('../lib/auth')
+const { getUserToken } = require('../lib/db')
 const router = express.Router();
 
 // GET /api/segments?bounds=sw_lat,sw_lng,ne_lat,ne_lng or lat_min/lon_min/lat_max/lon_max
 router.get('/', async (req, res) => {
   try {
-    // ensure token is valid (and refresh if needed)
-    let token
-    try {
-      token = await refreshTokenIfNeeded()
-    } catch (e) {
-      console.error('Token refresh failed or missing:', e.message || e)
-      return res.status(500).json({ error: 'Strava token unavailable', details: String(e) })
+    let token;
+
+    // If user is authenticated, use their token
+    if (req.user && req.user.userId) {
+      try {
+        token = await refreshUserToken(req.user.userId)
+      } catch (e) {
+        console.error('User token refresh failed:', e.message || e)
+        // Fall back to app token
+        token = await refreshTokenIfNeeded()
+      }
+    } else {
+      // No authenticated user, use app token
+      try {
+        token = await refreshTokenIfNeeded()
+      } catch (e) {
+        console.error('Token refresh failed or missing:', e.message || e)
+        return res.status(500).json({ error: 'Strava token unavailable', details: String(e) })
+      }
     }
 
     if (!token) return res.status(500).json({ error: 'STRAVA_ACCESS_TOKEN not set in env' })
