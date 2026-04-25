@@ -21,28 +21,30 @@ export function AuthProvider({ children }) {
     setLoading(false)
   }, [])
 
-  // Parse JWT from URL hash (after OAuth callback)
+  // Parse JWT from URL query params or hash (after OAuth callback)
   useEffect(() => {
+    const search = window.location.search
     const hash = window.location.hash
-    if (hash.includes('jwt=')) {
-      const params = new URLSearchParams(hash.slice(1))
-      const jwt = params.get('jwt')
-      const userId = params.get('userId')
-      const errorParam = params.get('error')
+    const source = search.includes('jwt=') ? search : hash.includes('jwt=') ? `?${hash.slice(1)}` : null
+    if (!source) return
 
-      if (errorParam) {
-        setError(`OAuth error: ${errorParam}`)
-        window.history.replaceState({}, document.title, window.location.pathname)
-        return
-      }
+    const params = new URLSearchParams(source)
+    const jwt = params.get('jwt')
+    const userId = params.get('userId')
+    const errorParam = params.get('error')
 
-      if (jwt && userId) {
-        localStorage.setItem('jwt', jwt)
-        localStorage.setItem('userId', userId)
-        setIsAuthenticated(true)
-        setUser({ userId })
-        window.history.replaceState({}, document.title, window.location.pathname)
-      }
+    if (errorParam) {
+      setError(`OAuth error: ${errorParam}`)
+      window.history.replaceState({}, document.title, window.location.pathname)
+      return
+    }
+
+    if (jwt && userId) {
+      localStorage.setItem('jwt', jwt)
+      localStorage.setItem('userId', userId)
+      setIsAuthenticated(true)
+      setUser({ userId })
+      window.history.replaceState({}, document.title, window.location.pathname)
     }
   }, [])
 

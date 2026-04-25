@@ -28,7 +28,7 @@ router.post('/login', (req, res) => {
   stravaAuthUrl.searchParams.set('response_type', 'code')
   stravaAuthUrl.searchParams.set('redirect_uri', callbackUrl)
   stravaAuthUrl.searchParams.set('approval_prompt', 'force')
-  stravaAuthUrl.searchParams.set('scope', 'read,activity:read')
+  stravaAuthUrl.searchParams.set('scope', 'read,activity:read_all')
   stravaAuthUrl.searchParams.set('state', state)
 
   res.json({ authUrl: stravaAuthUrl.toString() })
