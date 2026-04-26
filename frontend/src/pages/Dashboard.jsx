@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import { Activity, Trophy, Users, LayoutDashboard, Map as MapIcon, Route, RefreshCw, BarChart2 } from 'lucide-react'
+import { Activity, Trophy, Users, LayoutDashboard, Map as MapIcon, Route, RefreshCw, BarChart2, Palette } from 'lucide-react'
 
 function authHeaders() {
   const jwt = localStorage.getItem('jwt')
@@ -110,12 +110,12 @@ export default function Dashboard() {
   }, [isAuthenticated])
 
   useEffect(() => {
-    if (mapState.syncResult && !mapState.syncing) {
+    if ((mapState.syncResult && !mapState.syncing) || mapState.lastUpdate) {
       fetchActivityStatus()
       fetchStats()
       fetchSuggestions()
     }
-  }, [mapState.syncResult, mapState.syncing])
+  }, [mapState.syncResult, mapState.syncing, mapState.lastUpdate])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -247,6 +247,15 @@ export default function Dashboard() {
             >
               <Activity className="w-4 h-4" />
               {mapState.showCoverage ? 'Coverage ON' : 'My Coverage'}
+            </button>
+            <button
+              onClick={() => mapRef.current?.toggleColors()}
+              className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                mapState.useColors !== false ? 'bg-brand text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Palette className="w-4 h-4" />
+              {mapState.useColors !== false ? 'Colors ON' : 'Colors OFF'}
             </button>
             <button
               onClick={() => mapRef.current?.syncActivities()}

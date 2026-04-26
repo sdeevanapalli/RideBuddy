@@ -2,6 +2,18 @@ import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } f
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useAuth } from '../context/AuthContext'
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet'
+
+// Fix Leaflet's default marker icon path issue in React/Vite
+import icon from 'leaflet/dist/images/marker-icon.png'
+import iconShadow from 'leaflet/dist/images/marker-shadow.png'
+const DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+})
+L.Marker.prototype.options.icon = DefaultIcon
 
 const savedKey = 'ridebuddy_saved_routes'
 
@@ -34,17 +46,46 @@ function qualityLabel(score) {
   return 'Rough'
 }
 
-// forwardRef so Dashboard can call findRoutes / toggleCoverage / etc. via a ref.
+// FitBounds component calculates bounds around visible routes and auto-fits
+function FitBounds({ segments, highlightData }) {
+  const map = useMap()
+  
+  useEffect(() => {
+    const latlngs = []
+    
+    if (highlightData) {
+      latlngs.push(...highlightData.coords)
+    } else if (segments && segments.length > 0) {
+      segments.forEach(s => {
+        if (s.start_latlng) latlngs.push(s.start_latlng)
+        if (s.end_latlng) latlngs.push(s.end_latlng)
+      })
+    }
+
+    if (latlngs.length > 0) {
+      try {
+        const bounds = L.latLngBounds(latlngs)
+        map.fitBounds(bounds, { padding: [50, 50] })
+      } catch (err) {
+        console.warn("Could not fit bounds", err)
+      }
+    }
+  }, [map, segments, highlightData])
+  
+  return null
+}
+
 const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
   const { isAuthenticated } = useAuth()
-  const mapRef = useRef(null)
-  const mapElRef = useRef(null)
-  const segmentsLayerRef = useRef(null)
-  const coverageLayerRef = useRef(null)
-  const qualityLayerRef = useRef(null)
-  const highlightLayerRef = useRef(null)
+  
+  // Expose map instance for things like getBounds() 
+  const [mapInstance, setMapInstance] = useState(null)
 
   const [segments, setSegments] = useState([])
+  const [coverageData, setCoverageData] = useState(null)
+  const [qualityData, setQualityData] = useState(null)
+  const [highlightData, setHighlightData] = useState(null)
+
   const [showCoverage, setShowCoverage] = useState(false)
   const [coverageLoaded, setCoverageLoaded] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -54,6 +95,8 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
   const [qualityLoaded, setQualityLoaded] = useState(false)
   const [scoringRoads, setScoringRoads] = useState(false)
   const [mapReady, setMapReady] = useState(false)
+  const [useColors, setUseColors] = useState(true)
+  const [lastUpdate, setLastUpdate] = useState(Date.now())
 
   // Stable ref avoids the onStateUpdate callback being a useEffect dependency
   const onStateUpdateRef = useRef(onStateUpdate)
@@ -62,28 +105,9 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
   // Push state to Dashboard whenever relevant values change
   useEffect(() => {
     onStateUpdateRef.current?.({
-      showCoverage, showQuality, syncing, syncStatus, syncResult, scoringRoads,
+      showCoverage, showQuality, syncing, syncStatus, syncResult, scoringRoads, useColors, lastUpdate
     })
-  }, [showCoverage, showQuality, syncing, syncStatus, syncResult, scoringRoads])
-
-  // Map initialisation
-  useEffect(() => {
-    if (mapRef.current) return
-    const map = L.map(mapElRef.current).setView([37.7749, -122.4194], 12)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map)
-    segmentsLayerRef.current = L.layerGroup().addTo(map)
-    coverageLayerRef.current = L.layerGroup()
-    qualityLayerRef.current = L.layerGroup()
-    highlightLayerRef.current = L.layerGroup()
-    mapRef.current = map
-    setMapReady(true)
-    
-    map.locate({ setView: true, maxZoom: 13, timeout: 5000 }).on('locationerror', (e) => {
-      console.warn('Geolocation failed or denied:', e.message)
-    })
-  }, [])
+  }, [showCoverage, showQuality, syncing, syncStatus, syncResult, scoringRoads, useColors, lastUpdate])
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -95,7 +119,7 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
     }
   }, [isAuthenticated])
 
-  // Consume any highlight queued via sessionStorage (standalone /map route)
+  // Consume any highlight queued via sessionStorage
   useEffect(() => {
     if (!mapReady) return
     const raw = sessionStorage.getItem('ridebuddy_highlight')
@@ -107,13 +131,28 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
     } catch (_) {}
   }, [mapReady])
 
-  // Expose imperative API — no dep array so the handle always uses the latest closures
+  // Ensure client-side only render wrapper
+  const [isClient, setIsClient] = useState(false)
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  useEffect(() => {
+    if (mapInstance && !mapReady) {
+      setMapReady(true)
+      mapInstance.locate({ setView: false, maxZoom: 13, timeout: 5000 }).on('locationerror', (err) => {
+        console.warn('Geolocation failed or denied:', err.message)
+      })
+    }
+  }, [mapInstance, mapReady])
+
   useImperativeHandle(ref, () => ({
     findRoutes,
     toggleCoverage,
     toggleQuality,
     syncActivities,
     highlight,
+    toggleColors: () => setUseColors(prev => !prev)
   }))
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -124,9 +163,8 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
   }
 
   function getBoundsString() {
-    const map = mapRef.current
-    if (!map) return null
-    const b = map.getBounds()
+    if (!mapInstance) return null
+    const b = mapInstance.getBounds()
     return `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`
   }
 
@@ -140,56 +178,25 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
     })
     if (!resp.ok) { alert('Error fetching segments: ' + (await resp.text())); return }
     const data = await resp.json()
-    const segs = data.segments || []
-    setSegments(segs)
-    drawSegments(segs)
-    setQualityLoaded(false)
+    setSegments(data.segments || [])
+    
+    // Auto-score so the dashboard populated immediately
+    setScoringRoads(true)
+    await loadQuality(!isAuthenticated)
+    setScoringRoads(false)
+    setLastUpdate(Date.now())
   }
 
-  function drawSegments(segs) {
-    if (!segmentsLayerRef.current) return
-    segmentsLayerRef.current.clearLayers()
-    segs.forEach((s) => {
-      const start = s.start_latlng
-      const end = s.end_latlng
-      if (!start || !end) return
-      const marker = L.marker([start[0], start[1]])
-      const poly = L.polyline([[start[0], start[1]], [end[0], end[1]]], { color: '#2563eb' })
-      marker.bindPopup(segmentPopupContent(s))
-      poly.on('click', () => marker.openPopup())
-      segmentsLayerRef.current.addLayer(marker)
-      segmentsLayerRef.current.addLayer(poly)
-    })
-  }
-
-  function segmentPopupContent(s) {
-    const distKm = (s.distance / 1000).toFixed(2)
-    return `<div style="min-width:200px"><strong>${s.name}</strong><br/>Distance: ${distKm} km<br/>Avg grade: ${s.avg_grade}%<br/>Efforts: ${s.effort_count || s.efforts || 'N/A'}<br/><button id="save-${s.id}">Save route</button></div>`
-  }
-
-  useEffect(() => {
-    function attachSaveHandlers() {
-      document.querySelectorAll('[id^="save-"]').forEach((btn) => {
-        if (btn.dataset.bound) return
-        btn.dataset.bound = '1'
-        btn.addEventListener('click', () => {
-          const id = btn.id.replace('save-', '')
-          const seg = segments.find((x) => String(x.id) === String(id))
-          if (!seg) return
-          const saved = JSON.parse(localStorage.getItem(savedKey) || '[]')
-          if (!saved.find((r) => String(r.id) === String(seg.id))) {
-            saved.push({ id: seg.id, name: seg.name, distance: seg.distance, start: seg.start_latlng })
-            localStorage.setItem(savedKey, JSON.stringify(saved))
-            alert('Saved: ' + seg.name)
-          } else {
-            alert('Already saved')
-          }
-        })
-      })
+  function handleSaveSegment(seg) {
+    const saved = JSON.parse(localStorage.getItem(savedKey) || '[]')
+    if (!saved.find((r) => String(r.id) === String(seg.id))) {
+      saved.push({ id: seg.id, name: seg.name, distance: seg.distance, start: seg.start_latlng })
+      localStorage.setItem(savedKey, JSON.stringify(saved))
+      alert('Saved: ' + seg.name)
+    } else {
+      alert('Already saved')
     }
-    const iv = setInterval(attachSaveHandlers, 500)
-    return () => clearInterval(iv)
-  }, [segments])
+  }
 
   // ── Coverage ─────────────────────────────────────────────────────────────────
 
@@ -206,30 +213,26 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
   }
 
   async function loadCoverage() {
-    if (!coverageLayerRef.current) return
     try {
       const resp = await fetch('/api/activities/coverage', { headers: authHeaders() })
       if (!resp.ok) return
       const geojson = await resp.json()
-      coverageLayerRef.current.clearLayers()
-      geojson.features.forEach((f) => {
-        if (f.geometry.type !== 'LineString') return
-        const latlngs = f.geometry.coordinates.map(([lng, lat]) => [lat, lng])
-        L.polyline(latlngs, { color: '#3b82f6', opacity: 0.5, weight: 2 }).addTo(coverageLayerRef.current)
-      })
+      const coveragePolys = geojson.features
+        .filter(f => f.geometry.type === 'LineString')
+        .map(f => ({
+          id: Math.random().toString(), // Use Math.random if no ID is present
+          coords: f.geometry.coordinates.map(([lng, lat]) => [lat, lng])
+        }))
+      setCoverageData(coveragePolys)
       setCoverageLoaded(true)
     } catch (_) {}
   }
 
   async function toggleCoverage() {
-    const map = mapRef.current
-    if (!map || !coverageLayerRef.current) return
     if (!showCoverage) {
       if (!coverageLoaded) await loadCoverage()
-      coverageLayerRef.current.addTo(map)
       setShowCoverage(true)
     } else {
-      map.removeLayer(coverageLayerRef.current)
       setShowCoverage(false)
     }
   }
@@ -244,7 +247,7 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
       await fetchSyncStatus()
       if (showCoverage) {
         setCoverageLoaded(false)
-        coverageLayerRef.current?.clearLayers()
+        setCoverageData(null)
         await loadCoverage()
       }
     } catch (err) {
@@ -257,51 +260,31 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
   // ── Quality ───────────────────────────────────────────────────────────────────
 
   async function loadQuality(useCache) {
-    if (!qualityLayerRef.current) return
     const endpoint = useCache ? '/api/segments/quality/cached' : '/api/segments/quality'
     try {
       const geojson = await fetch(endpoint, { headers: authHeaders() }).then((r) => r.json())
-      qualityLayerRef.current.clearLayers()
-      ;(geojson.features || []).forEach((f) => {
-        if (f.geometry.type !== 'LineString') return
-        const latlngs = f.geometry.coordinates.map(([lng, lat]) => [lat, lng])
-        const { name, quality_score, avg_speed, effort_count, avg_grade, distance } = f.properties
-        const color = qualityColor(quality_score)
-        const poly = L.polyline(latlngs, { color, weight: 4, opacity: 0.8 })
-        const distKm = distance ? (distance / 1000).toFixed(2) : '?'
-        const speedKmh = avg_speed ? (avg_speed * 3.6).toFixed(1) : 'N/A'
-        const scoreStr = quality_score != null
-          ? `${quality_score.toFixed(0)}/100 (${qualityLabel(quality_score)})`
-          : 'N/A'
-        poly.bindPopup(
-          `<div style="min-width:190px">
-            <strong>${name || 'Segment'}</strong><br/>
-            Quality: ${scoreStr}<br/>
-            Median speed: ${speedKmh} km/h<br/>
-            Efforts: ${effort_count ?? 'N/A'}<br/>
-            Avg grade: ${avg_grade != null ? avg_grade + '%' : 'N/A'}<br/>
-            Distance: ${distKm} km
-          </div>`
-        )
-        qualityLayerRef.current.addLayer(poly)
-      })
+      const qualityPolys = (geojson.features || [])
+        .filter(f => f.geometry.type === 'LineString')
+        .map(f => ({
+          id: f.properties.id || Math.random().toString(),
+          coords: f.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+          properties: f.properties
+        }))
+      setQualityData(qualityPolys)
       setQualityLoaded(true)
     } catch (_) {}
   }
 
   async function toggleQuality() {
-    const map = mapRef.current
-    if (!map || !qualityLayerRef.current) return
     if (!showQuality) {
       if (!qualityLoaded) {
         setScoringRoads(true)
         await loadQuality(!isAuthenticated)
         setScoringRoads(false)
+        setLastUpdate(Date.now())
       }
-      qualityLayerRef.current.addTo(map)
       setShowQuality(true)
     } else {
-      map.removeLayer(qualityLayerRef.current)
       setShowQuality(false)
     }
   }
@@ -311,25 +294,106 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
   function highlight(encoded, color) {
     try {
       const latlngs = decodePolyline(encoded)
-      if (!latlngs.length || !mapRef.current || !highlightLayerRef.current) return
+      if (!latlngs.length) return
       const colorHex = color === 'purple' ? '#9333ea' : '#f97316'
-      highlightLayerRef.current.clearLayers()
-      L.polyline(latlngs, { color: colorHex, weight: 5, opacity: 0.9 })
-        .addTo(highlightLayerRef.current)
-      highlightLayerRef.current.addTo(mapRef.current)
-      mapRef.current.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40] })
+      setHighlightData({ coords: latlngs, color: colorHex })
     } catch (_) {}
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  if (!isClient) return null
+
   return (
     <div className="relative w-full h-full">
-      <div ref={mapElRef} className="w-full h-full" />
+      <MapContainer 
+        center={[17.3850, 78.4867]} 
+        zoom={12} 
+        className="w-full h-full rounded-lg overflow-hidden shadow-lg z-0"
+        ref={setMapInstance}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
 
-      {showQuality && (
-        <div className="absolute bottom-3 right-3 bg-white p-3 rounded shadow text-xs z-[1000]">
-          <div className="font-semibold mb-1.5">Road Quality</div>
+        <FitBounds 
+          segments={segments} 
+          coverageData={coverageData} 
+          qualityData={qualityData} 
+          highlightData={highlightData}
+          showCoverage={showCoverage}
+          showQuality={showQuality}
+        />
+
+        {/* Coverage Layer */}
+        {showCoverage && coverageData?.map((c, i) => (
+          <Polyline key={`cov-${i}`} positions={c.coords} pathOptions={{ color: useColors ? '#3b82f6' : '#ffffff', opacity: 0.5, weight: 2 }} />
+        ))}
+
+        {/* Quality Layer */}
+        {showQuality && qualityData?.map((q, i) => {
+          const { name, quality_score, avg_speed, effort_count, avg_grade, distance } = q.properties
+          const color = useColors ? qualityColor(quality_score) : '#ffffff'
+          const distKm = distance ? (distance / 1000).toFixed(2) : '?'
+          const speedKmh = avg_speed ? (avg_speed * 3.6).toFixed(1) : 'N/A'
+          const scoreStr = quality_score != null
+            ? `${quality_score.toFixed(0)}/100 (${qualityLabel(quality_score)})`
+            : 'N/A'
+            
+          return (
+            <Polyline key={`qual-${i}`} positions={q.coords} pathOptions={{ color, weight: 4, opacity: 0.8 }}>
+              <Popup>
+                <div style={{ minWidth: '190px', fontFamily: 'sans-serif' }}>
+                  <strong className="text-gray-900">{name || 'Segment'}</strong><br/>
+                  <span className="text-gray-600">Quality:</span> {scoreStr}<br/>
+                  <span className="text-gray-600">Median speed:</span> {speedKmh} km/h<br/>
+                  <span className="text-gray-600">Efforts:</span> {effort_count ?? 'N/A'}<br/>
+                  <span className="text-gray-600">Avg grade:</span> {avg_grade != null ? avg_grade + '%' : 'N/A'}<br/>
+                  <span className="text-gray-600">Distance:</span> {distKm} km
+                </div>
+              </Popup>
+            </Polyline>
+          )
+        })}
+
+        {/* Segments Layer */}
+        {segments?.map((s, i) => {
+          if (!s.start_latlng || !s.end_latlng) return null
+          const distKm = (s.distance / 1000).toFixed(2)
+          return (
+            <React.Fragment key={`seg-${s.id || i}`}>
+              <Polyline positions={[s.start_latlng, s.end_latlng]} pathOptions={{ color: useColors ? '#2563eb' : '#ffffff', weight: 4 }} />
+              <Marker position={s.start_latlng}>
+                <Popup>
+                  <div style={{ minWidth: '200px', fontFamily: 'sans-serif' }}>
+                    <strong className="text-gray-900">{s.name}</strong><br/>
+                    <span className="text-gray-600">Distance:</span> {distKm} km<br/>
+                    <span className="text-gray-600">Avg grade:</span> {s.avg_grade}%<br/>
+                    <span className="text-gray-600">Efforts:</span> {s.effort_count || s.efforts || 'N/A'}<br/>
+                    <button 
+                      onClick={() => handleSaveSegment(s)}
+                      className="mt-2 w-full px-3 py-1.5 bg-brand text-white rounded hover:bg-brand-hover transition-colors text-sm font-medium"
+                    >
+                      Save route
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            </React.Fragment>
+          )
+        })}
+
+        {/* Highlight Layer */}
+        {highlightData && (
+          <Polyline positions={highlightData.coords} pathOptions={{ color: useColors ? highlightData.color : '#ffffff', weight: 5, opacity: 0.9 }} />
+        )}
+      </MapContainer>
+
+      {/* Quality Legend */}
+      {showQuality && useColors && (
+        <div className="absolute bottom-3 right-3 bg-white p-3 rounded-lg shadow-md text-xs z-[1000]">
+          <div className="font-semibold mb-1.5 text-gray-900">Road Quality</div>
           {[
             { color: '#00c853', label: 'Smooth', range: '80–100' },
             { color: '#ffb300', label: 'Moderate', range: '50–79' },
@@ -338,7 +402,7 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
           ].map(({ color, label, range }) => (
             <div key={label} className="flex items-center gap-1.5 mb-1">
               <span className="inline-block rounded" style={{ width: 16, height: 4, background: color }} />
-              <span>
+              <span className="text-gray-700">
                 {label}
                 {range && <span className="text-gray-400 ml-1">({range})</span>}
               </span>
