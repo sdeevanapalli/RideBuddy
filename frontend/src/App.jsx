@@ -1,7 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import MapView from './components/MapView'
 import Dashboard from './pages/Dashboard'
 import LoginButton from './components/LoginButton'
 
@@ -18,12 +17,6 @@ function NavBar() {
             <Link
               to="/"
               className={`transition-colors ${active('/') ? 'text-white underline underline-offset-4' : 'text-blue-200 hover:text-white'}`}
-            >
-              Map
-            </Link>
-            <Link
-              to="/dashboard"
-              className={`transition-colors ${active('/dashboard') ? 'text-white underline underline-offset-4' : 'text-blue-200 hover:text-white'}`}
             >
               Dashboard
             </Link>
@@ -43,12 +36,7 @@ export default function App() {
           <NavBar />
           <main className="flex-1 flex flex-col">
             <Routes>
-              <Route path="/" element={
-                <div style={{ height: 'calc(100vh - 64px)' }}>
-                  <MapView />
-                </div>
-              } />
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/" element={<Dashboard />} />
             </Routes>
           </main>
         </div>

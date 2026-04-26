@@ -85,6 +85,8 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
 
+  const [activityStatus, setActivityStatus] = useState(null)
+
   const [suggestions, setSuggestions] = useState([])
   const [suggestionsLoading, setSuggestionsLoading] = useState(true)
 
@@ -100,7 +102,16 @@ export default function Dashboard() {
     if (!isAuthenticated) return
     fetchStats()
     fetchSuggestions()
+    fetchActivityStatus()
   }, [isAuthenticated])
+
+  useEffect(() => {
+    if (mapState.syncResult && !mapState.syncing) {
+      fetchActivityStatus()
+      fetchStats()
+      fetchSuggestions()
+    }
+  }, [mapState.syncResult, mapState.syncing])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -116,6 +127,18 @@ export default function Dashboard() {
     } finally {
       setStatsLoading(false)
     }
+  }
+
+  async function fetchActivityStatus() {
+    try {
+      const resp = await fetch('/api/activities/status', { headers: authHeaders() })
+      if (resp.ok) {
+        const data = await resp.json()
+        setActivityStatus(data)
+        return data
+      }
+    } catch (_) {}
+    return null
   }
 
   async function fetchSuggestions() {
@@ -220,7 +243,7 @@ export default function Dashboard() {
               disabled={mapState.syncing}
               className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
             >
-              {mapState.syncing ? 'Syncing…' : 'Sync Activities'}
+              {mapState.syncing ? 'Syncing…' : 'Resync'}
             </button>
             <div className="mt-auto text-xs text-gray-400 space-y-1">
               {mapState.syncStatus?.last_synced && (
@@ -282,6 +305,19 @@ export default function Dashboard() {
             />
             <StatCard label="Segments Saved" value={stats?.total_segments_saved} loading={statsLoading} />
           </div>
+
+          {/* Sync status indicator */}
+          {activityStatus && (
+            <div className="flex items-center gap-2 text-xs text-gray-400 -mt-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
+              <span>
+                Last synced: <span className="font-medium text-gray-600">{activityStatus.count} activities</span>
+                {activityStatus.lastSyncedAt && (
+                  <> · {new Date(activityStatus.lastSyncedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                )}
+              </span>
+            </div>
+          )}
 
           {/* Charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

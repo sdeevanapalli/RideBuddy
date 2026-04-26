@@ -79,10 +79,20 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
     highlightLayerRef.current = L.layerGroup()
     mapRef.current = map
     setMapReady(true)
+    
+    map.locate({ setView: true, maxZoom: 13, timeout: 5000 }).on('locationerror', (e) => {
+      console.warn('Geolocation failed or denied:', e.message)
+    })
   }, [])
 
   useEffect(() => {
-    if (isAuthenticated) fetchSyncStatus()
+    if (isAuthenticated) {
+      fetchSyncStatus().then((status) => {
+        if (status && status.count === 0) {
+          syncActivities()
+        }
+      })
+    }
   }, [isAuthenticated])
 
   // Consume any highlight queued via sessionStorage (standalone /map route)
@@ -186,8 +196,13 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
   async function fetchSyncStatus() {
     try {
       const resp = await fetch('/api/activities/status', { headers: authHeaders() })
-      if (resp.ok) setSyncStatus(await resp.json())
+      if (resp.ok) {
+        const data = await resp.json()
+        setSyncStatus(data)
+        return data
+      }
     } catch (_) {}
+    return null
   }
 
   async function loadCoverage() {

@@ -15,7 +15,7 @@ router.get('/', (req, res) => {
     const userId = req.user.userId
 
     const segments = db.prepare(
-      'SELECT * FROM segments WHERE quality_score >= 70 AND scored_at IS NOT NULL'
+      'SELECT * FROM segments WHERE quality_score >= 0 AND scored_at IS NOT NULL'
     ).all()
 
     const activities = getActivitiesByUser(userId)

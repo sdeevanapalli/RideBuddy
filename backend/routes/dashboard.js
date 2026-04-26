@@ -19,6 +19,8 @@ router.get('/stats', (req, res) => {
       FROM activities WHERE user_id = ?
     `).get(userId)
 
+    console.log('[dashboard/stats] activityStats:', activityStats)
+
     const segmentStats = db.prepare(`
       SELECT
         COUNT(*) as total_segments_saved,
@@ -29,15 +31,22 @@ router.get('/stats', (req, res) => {
       FROM segments
     `).get()
 
+    console.log('[dashboard/stats] segmentStats:', segmentStats)
+
+    // Strava stores start_date as ISO 8601 with a trailing 'Z' (e.g. "2024-04-20T10:30:00Z").
+    // SQLite's strftime() does not recognise the Z suffix and returns NULL for such strings,
+    // which collapses every row into a single NULL group.  Strip the Z first.
     const weeklyDistance = db.prepare(`
       SELECT
-        strftime('%Y-%W', start_date) as week,
+        strftime('%Y-%W', replace(start_date, 'Z', '')) as week,
         ROUND(SUM(distance) / 1000.0, 1) as distance_km
       FROM activities
-      WHERE user_id = ? AND start_date >= date('now', '-56 days')
+      WHERE user_id = ? AND replace(start_date, 'Z', '') >= date('now', '-56 days')
       GROUP BY week
       ORDER BY week ASC
     `).all(userId)
+
+    console.log('[dashboard/stats] weeklyDistance rows:', weeklyDistance)
 
     const topSegments = db.prepare(`
       SELECT strava_id, name, quality_score, distance, avg_grade

@@ -42,14 +42,20 @@ router.post('/sync', async (req, res) => {
       const activities = await resp.json()
       pagesFetched++
 
+      console.log(`[sync] page ${page}: got ${activities.length} activities`)
+
       if (!activities.length) break
 
+      let pageSynced = 0
       for (const a of activities) {
         const encoded = a.map && a.map.summary_polyline
         if (!encoded) continue
         upsertActivity(userId, a.id, a.name || '', a.start_date || '', encoded, a.distance || 0, a.moving_time || 0)
         totalSynced++
+        pageSynced++
       }
+
+      console.log(`[sync] page ${page}: stored ${pageSynced} (with polyline) of ${activities.length}`)
 
       if (activities.length < 200) break
       page++
