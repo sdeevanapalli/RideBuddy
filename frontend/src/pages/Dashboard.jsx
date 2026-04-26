@@ -5,6 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
+import { Activity, Trophy, Users, LayoutDashboard, Map as MapIcon, Route, RefreshCw, BarChart2 } from 'lucide-react'
 
 function authHeaders() {
   const jwt = localStorage.getItem('jwt')
@@ -52,14 +53,17 @@ function Skeleton({ className }) {
   return <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
 }
 
-function StatCard({ label, value, unit, loading }) {
+function StatCard({ label, value, unit, loading, icon: Icon }) {
   return (
-    <div className="bg-white rounded-xl shadow p-5 flex flex-col gap-1">
-      <div className="text-sm text-gray-500 font-medium">{label}</div>
+    <div className="bg-white rounded-lg shadow-sm p-6 flex flex-col gap-2">
+      <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+        {Icon && <Icon className="w-4 h-4 text-gray-400" />}
+        {label}
+      </div>
       {loading
         ? <Skeleton className="h-9 w-28 mt-1" />
         : (
-          <div className="text-3xl font-bold text-gray-800">
+          <div className="text-3xl font-bold text-gray-900">
             {value ?? '—'}
             {unit && <span className="text-base font-normal text-gray-500 ml-1">{unit}</span>}
           </div>
@@ -210,39 +214,46 @@ export default function Dashboard() {
     <div className="max-w-6xl mx-auto w-full p-6 space-y-6">
       {/* Map + Controls */}
       {isAuthenticated && (
-        <div className="bg-white rounded-xl shadow flex overflow-hidden" style={{ height: 380 }}>
+        <div className="bg-white rounded-lg shadow-sm flex overflow-hidden" style={{ height: 420 }}>
           <div className="flex-1 min-w-0">
             <MapView ref={mapRef} onStateUpdate={handleMapStateUpdate} />
           </div>
-          <div className="w-52 flex-shrink-0 border-l border-gray-100 p-4 flex flex-col gap-3">
-            <h3 className="font-semibold text-gray-700 text-sm">Map Controls</h3>
+          <div className="w-56 flex-shrink-0 border-l border-gray-100 p-5 flex flex-col gap-3">
+            <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2 mb-1">
+              <MapIcon className="w-4 h-4 text-gray-500" />
+              Map Controls
+            </h3>
             <button
               onClick={() => mapRef.current?.findRoutes()}
-              className="w-full text-left px-3 py-2 rounded-lg text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors font-medium"
+              className="w-full text-left px-4 py-2 rounded-lg text-sm bg-brand/10 text-brand hover:bg-brand/20 transition-all duration-200 font-medium flex items-center gap-2"
             >
+              <Route className="w-4 h-4" />
               Find Routes
             </button>
             <button
               onClick={() => mapRef.current?.toggleQuality()}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                mapState.showQuality ? 'bg-green-100 text-green-700' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                mapState.showQuality ? 'bg-brand text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
+              <BarChart2 className="w-4 h-4" />
               {mapState.scoringRoads ? 'Scoring…' : mapState.showQuality ? 'Quality ON' : 'Road Quality'}
             </button>
             <button
               onClick={() => mapRef.current?.toggleCoverage()}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                mapState.showCoverage ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                mapState.showCoverage ? 'bg-brand text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
+              <Activity className="w-4 h-4" />
               {mapState.showCoverage ? 'Coverage ON' : 'My Coverage'}
             </button>
             <button
               onClick={() => mapRef.current?.syncActivities()}
               disabled={mapState.syncing}
-              className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+              className="w-full text-left px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all duration-200 flex items-center gap-2 disabled:opacity-40"
             >
+              <RefreshCw className={`w-4 h-4 ${mapState.syncing ? 'animate-spin' : ''}`} />
               {mapState.syncing ? 'Syncing…' : 'Resync'}
             </button>
             <div className="mt-auto text-xs text-gray-400 space-y-1">
@@ -265,21 +276,22 @@ export default function Dashboard() {
       )}
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-2 pb-2">
         {[
-          { id: 'overview', label: 'Overview' },
-          { id: 'prs', label: 'PRs & KOMs' },
-          { id: 'friends', label: 'Friends' },
-        ].map(({ id, label }) => (
+          { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+          { id: 'prs', label: 'PRs & KOMs', icon: Trophy },
+          { id: 'friends', label: 'Friends', icon: Users },
+        ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`px-5 py-2.5 text-sm font-medium rounded-t transition-colors ${
+            className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 flex items-center gap-2 ${
               activeTab === id
-                ? 'text-blue-600 border-b-2 border-blue-600 -mb-px bg-white'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-gray-900 text-white shadow-md'
+                : 'bg-transparent text-gray-500 hover:bg-gray-200 hover:text-gray-700'
             }`}
           >
+            <Icon className="w-4 h-4" />
             {label}
           </button>
         ))}
@@ -292,18 +304,20 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard
               label="Total Distance"
+              icon={Route}
               value={stats?.total_distance_km != null ? Number(stats.total_distance_km).toFixed(0) : undefined}
               unit="km"
               loading={statsLoading}
             />
-            <StatCard label="Total Rides" value={stats?.total_activities} loading={statsLoading} />
+            <StatCard label="Total Rides" icon={Activity} value={stats?.total_activities} loading={statsLoading} />
             <StatCard
               label="Moving Time"
+              icon={RefreshCw}
               value={stats?.total_moving_time_hrs != null ? Number(stats.total_moving_time_hrs).toFixed(1) : undefined}
               unit="hrs"
               loading={statsLoading}
             />
-            <StatCard label="Segments Saved" value={stats?.total_segments_saved} loading={statsLoading} />
+            <StatCard label="Segments Saved" icon={MapIcon} value={stats?.total_segments_saved} loading={statsLoading} />
           </div>
 
           {/* Sync status indicator */}
@@ -321,7 +335,7 @@ export default function Dashboard() {
 
           {/* Charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl shadow p-5">
+            <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="font-semibold text-gray-700 mb-4">Weekly Distance (last 8 weeks)</h3>
               {statsLoading ? (
                 <Skeleton className="h-48 w-full" />
@@ -342,7 +356,7 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="bg-white rounded-xl shadow p-5">
+            <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="font-semibold text-gray-700 mb-4">Road Quality Distribution</h3>
               {statsLoading ? (
                 <Skeleton className="h-48 w-full" />
@@ -373,7 +387,7 @@ export default function Dashboard() {
           </div>
 
           {/* Top segments table */}
-          <div className="bg-white rounded-xl shadow p-5">
+          <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="font-semibold text-gray-700 mb-4">Top Segments by Quality</h3>
             {statsLoading ? (
               <div className="space-y-2">
@@ -408,7 +422,7 @@ export default function Dashboard() {
           </div>
 
           {/* Suggestions */}
-          <div className="bg-white rounded-xl shadow p-5">
+          <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="font-semibold text-gray-700 mb-1">Suggested Routes</h3>
             <p className="text-xs text-gray-400 mb-4">High-quality segments you haven't ridden yet</p>
             {suggestionsLoading ? (
@@ -455,7 +469,7 @@ export default function Dashboard() {
 
       {/* ── PRs & KOMs ──────────────────────────────────────────────────────────── */}
       {activeTab === 'prs' && (
-        <div className="bg-white rounded-xl shadow p-5">
+        <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between mb-1">
             <h3 className="font-semibold text-gray-700">Near-KOM Segments</h3>
             <button
@@ -551,7 +565,7 @@ export default function Dashboard() {
             </div>
           ) : friends.length > 0 ? (
             friends.map((route) => (
-              <div key={route.activity_id} className="bg-white rounded-xl shadow p-4 flex items-center gap-4">
+              <div key={route.activity_id} className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-4">
                 {route.athlete_avatar ? (
                   <img
                     src={route.athlete_avatar}
@@ -592,7 +606,7 @@ export default function Dashboard() {
               </div>
             ))
           ) : friendsLoaded ? (
-            <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400 text-sm">
+            <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-400 text-sm">
               No friend routes found. This may be because your Strava friends have private activities,
               or you're not following anyone with public activities.
             </div>

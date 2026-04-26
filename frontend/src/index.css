@@ -5,5 +5,25 @@
 /* Leaflet defaults */
 @import 'leaflet/dist/leaflet.css';
 
-html,body,#root { height: 100%; }
-body { @apply bg-gray-50 }
+html, body, #root { 
+  height: 100%; 
+}
+
+body { 
+  @apply bg-gray-50 text-gray-900; 
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 rounded-full;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
