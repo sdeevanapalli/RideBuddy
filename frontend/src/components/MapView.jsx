@@ -3,6 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useAuth } from '../context/AuthContext'
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet'
+import { X, Navigation, MapPin, Coffee, Download, Save } from 'lucide-react'
 
 // Fix Leaflet's default marker icon path issue in React/Vite
 import icon from 'leaflet/dist/images/marker-icon.png'
@@ -98,6 +99,14 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
   const [useColors, setUseColors] = useState(true)
   const [lastUpdate, setLastUpdate] = useState(Date.now())
 
+  // Planner state
+  const [showPlanner, setShowPlanner] = useState(false)
+  const [plannerState, setPlannerState] = useState({
+    start: '', end: '', distance_km: 10, include_breakfast: false, breakfast_location: '', preferences: []
+  })
+  const [planningMode, setPlanningMode] = useState(false)
+  const [plannedRoute, setPlannedRoute] = useState(null)
+
   // Stable ref avoids the onStateUpdate callback being a useEffect dependency
   const onStateUpdateRef = useRef(onStateUpdate)
   useEffect(() => { onStateUpdateRef.current = onStateUpdate }, [onStateUpdate])
@@ -131,6 +140,16 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
     } catch (_) {}
   }, [mapReady])
 
+  // Auto-fit bounds for planned route
+  useEffect(() => {
+    if (plannedRoute && mapInstance) {
+      const latlngs = plannedRoute.waypoints.map(wp => [wp.lat, wp.lng])
+      if (latlngs.length > 0) {
+        try { mapInstance.fitBounds(L.latLngBounds(latlngs), { padding: [50, 50] }) } catch (_) {}
+      }
+    }
+  }, [plannedRoute, mapInstance])
+
   // Ensure client-side only render wrapper
   const [isClient, setIsClient] = useState(false)
   useEffect(() => {
@@ -152,7 +171,8 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
     toggleQuality,
     syncActivities,
     highlight,
-    toggleColors: () => setUseColors(prev => !prev)
+    toggleColors: () => setUseColors(prev => !prev),
+    openPlanner: () => setShowPlanner(true)
   }))
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -193,6 +213,67 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
       saved.push({ id: seg.id, name: seg.name, distance: seg.distance, start: seg.start_latlng })
       localStorage.setItem(savedKey, JSON.stringify(saved))
       alert('Saved: ' + seg.name)
+    } else {
+      alert('Already saved')
+    }
+  }
+
+  // ── Planner ──────────────────────────────────────────────────────────────────
+
+  function handleUseMyLocation() {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        setPlannerState(prev => ({ ...prev, start: `${position.coords.latitude}, ${position.coords.longitude}` }))
+      }, (err) => {
+        alert('Could not get location: ' + err.message)
+      })
+    }
+  }
+
+  function handlePreferenceToggle(pref) {
+    setPlannerState(prev => {
+      const prefs = prev.preferences.includes(pref)
+        ? prev.preferences.filter(p => p !== pref)
+        : [...prev.preferences, pref]
+      return { ...prev, preferences: prefs }
+    })
+  }
+
+  async function handlePlanRoute(e) {
+    e.preventDefault()
+    if (!plannerState.start) {
+      alert('Please enter a start point')
+      return
+    }
+    setPlanningMode(true)
+    try {
+      const resp = await fetch('/api/planner/route', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(plannerState)
+      })
+      if (!resp.ok) throw new Error(await resp.text())
+      const data = await resp.json()
+      setPlannedRoute(data)
+      setShowPlanner(false)
+      setPlannerState({
+        start: '', end: '', distance_km: 10, include_breakfast: false, breakfast_location: '', preferences: []
+      })
+    } catch (err) {
+      alert('Error planning route: ' + err.message)
+    } finally {
+      setPlanningMode(false)
+    }
+  }
+
+  function handleSavePlannedRoute() {
+    if (!plannedRoute) return
+    const saved = JSON.parse(localStorage.getItem(savedKey) || '[]')
+    const routeId = `planned-${plannedRoute.id || Date.now()}`
+    if (!saved.find((r) => r.id === routeId)) {
+      saved.push({ id: routeId, name: `Planned Route ${plannedRoute.estimated_distance_km.toFixed(1)}km`, distance: plannedRoute.estimated_distance_km * 1000, start: [plannedRoute.waypoints[0].lat, plannedRoute.waypoints[0].lng] })
+      localStorage.setItem(savedKey, JSON.stringify(saved))
+      alert('Route saved successfully!')
     } else {
       alert('Already saved')
     }
@@ -388,7 +469,200 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
         {highlightData && (
           <Polyline positions={highlightData.coords} pathOptions={{ color: useColors ? highlightData.color : '#ffffff', weight: 5, opacity: 0.9 }} />
         )}
+
+        {/* Planned Route Layer */}
+        {plannedRoute && (
+          <>
+            <Polyline 
+              positions={plannedRoute.waypoints.map(wp => [wp.lat, wp.lng])} 
+              pathOptions={{ color: '#ec4899', weight: 4, dashArray: '8, 8' }} 
+            />
+            {plannedRoute.waypoints.map((wp, i) => (
+              <Marker key={`wp-${i}`} position={[wp.lat, wp.lng]}>
+                <Popup>
+                  <strong className="text-gray-900">{wp.label}</strong>
+                </Popup>
+              </Marker>
+            ))}
+          </>
+        )}
       </MapContainer>
+
+      {/* Planned Route Summary Card */}
+      {plannedRoute && !showPlanner && (
+        <div className="absolute top-3 right-3 bg-white p-4 rounded-xl shadow-lg z-[1000] w-64 border border-gray-100">
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="font-bold text-gray-900">Your Route</h3>
+            <button onClick={() => setPlannedRoute(null)} className="text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="space-y-1 text-sm text-gray-600 mb-4">
+            <div className="flex justify-between">
+              <span>Distance</span>
+              <span className="font-medium text-gray-900">{plannedRoute.estimated_distance_km.toFixed(1)} km</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Quality Score</span>
+              <span className="font-medium text-gray-900">{plannedRoute.quality_score_avg ? plannedRoute.quality_score_avg.toFixed(0) : 'N/A'}/100</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Segments</span>
+              <span className="font-medium text-gray-900">{plannedRoute.segments_used?.length || 0}</span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <a 
+              href={plannedRoute.gpx_url}
+              download
+              className="w-full flex items-center justify-center gap-2 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Download GPX
+            </a>
+            <button 
+              onClick={handleSavePlannedRoute}
+              className="w-full flex items-center justify-center gap-2 py-2 bg-brand/10 text-brand rounded-lg text-sm font-medium hover:bg-brand/20 transition-colors"
+            >
+              <Save className="w-4 h-4" />
+              Save Route
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Planner Modal */}
+      {showPlanner && (
+        <div className="absolute inset-0 z-[2000] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-full">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                <Navigation className="w-4 h-4 text-brand" />
+                Plan a Route
+              </h2>
+              <button onClick={() => setShowPlanner(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto">
+              <form onSubmit={handlePlanRoute} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Start Point</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <MapPin className="absolute left-2.5 top-2 w-4 h-4 text-gray-400" />
+                      <input 
+                        type="text" 
+                        required
+                        value={plannerState.start}
+                        onChange={(e) => setPlannerState({...plannerState, start: e.target.value})}
+                        placeholder="Address or lat,lng"
+                        className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                    <button type="button" onClick={handleUseMyLocation} className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap">
+                      Use Location
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">End Point (Optional)</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-2.5 top-2 w-4 h-4 text-gray-400" />
+                    <input 
+                      type="text" 
+                      value={plannerState.end}
+                      onChange={(e) => setPlannerState({...plannerState, end: e.target.value})}
+                      placeholder="Leave empty for a loop"
+                      className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent transition-shadow"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-700">Distance</label>
+                    <span className="text-xs font-semibold text-brand">{plannerState.distance_km} km</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="5" max="150" step="5"
+                    value={plannerState.distance_km}
+                    onChange={(e) => setPlannerState({...plannerState, distance_km: parseInt(e.target.value)})}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1">
+                    <span>5km</span>
+                    <span>150km</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-orange-50/50 rounded-xl border border-orange-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer">
+                      <Coffee className="w-4 h-4 text-orange-500" />
+                      Add a breakfast stop?
+                    </label>
+                    <button 
+                      type="button"
+                      onClick={() => setPlannerState({...plannerState, include_breakfast: !plannerState.include_breakfast})}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${plannerState.include_breakfast ? 'bg-orange-500' : 'bg-gray-200'}`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${plannerState.include_breakfast ? 'translate-x-4' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  {plannerState.include_breakfast && (
+                    <input 
+                      type="text" 
+                      required
+                      value={plannerState.breakfast_location}
+                      onChange={(e) => setPlannerState({...plannerState, breakfast_location: e.target.value})}
+                      placeholder="e.g. Jubilee Hills, Cafe"
+                      className="w-full px-3 py-1.5 text-sm border border-orange-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent mt-1"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">Preferences</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['Flat', 'Scenic', 'Avoid traffic'].map(pref => (
+                      <button
+                        key={pref}
+                        type="button"
+                        onClick={() => handlePreferenceToggle(pref)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors border ${
+                          plannerState.preferences.includes(pref)
+                            ? 'bg-gray-900 text-white border-gray-900'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        {pref}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={planningMode}
+                  className="w-full mt-2 py-2.5 bg-brand text-white rounded-lg font-medium text-sm hover:bg-brand-hover transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {planningMode ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Planning your ride...
+                    </>
+                  ) : (
+                    'Plan Route'
+                  )}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quality Legend */}
       {showQuality && useColors && (

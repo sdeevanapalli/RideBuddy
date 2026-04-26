@@ -70,6 +70,20 @@ function initDB() {
     )
   `)
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS planned_routes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      name TEXT,
+      waypoints TEXT,
+      segments_used TEXT,
+      distance_km REAL,
+      quality_score_avg REAL,
+      include_breakfast INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `)
+
   // Migration: add columns that may be absent in older DBs
   try { db.exec('ALTER TABLE segments ADD COLUMN quality_score REAL') } catch (_) {}
   try { db.exec('ALTER TABLE segments ADD COLUMN avg_speed REAL') } catch (_) {}

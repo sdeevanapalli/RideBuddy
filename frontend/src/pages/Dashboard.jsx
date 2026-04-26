@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import { Activity, Trophy, Users, LayoutDashboard, Map as MapIcon, Route, RefreshCw, BarChart2, Palette } from 'lucide-react'
+import { Activity, Trophy, Users, LayoutDashboard, Map as MapIcon, Route, RefreshCw, BarChart2, Palette, Eye } from 'lucide-react'
 
 function authHeaders() {
   const jwt = localStorage.getItem('jwt')
@@ -224,11 +224,18 @@ export default function Dashboard() {
               Map Controls
             </h3>
             <button
-              onClick={() => mapRef.current?.findRoutes()}
-              className="w-full text-left px-4 py-2 rounded-lg text-sm bg-brand/10 text-brand hover:bg-brand/20 transition-all duration-200 font-medium flex items-center gap-2"
+              onClick={() => mapRef.current?.openPlanner()}
+              className="w-full text-left px-4 py-2 rounded-lg text-sm bg-brand text-white shadow-md hover:bg-brand-hover transition-all duration-200 font-medium flex items-center gap-2"
             >
               <Route className="w-4 h-4" />
-              Find Routes
+              Plan a Route
+            </button>
+            <button
+              onClick={() => mapRef.current?.findRoutes()}
+              className="w-full text-left px-4 py-1.5 rounded-lg text-xs bg-brand/10 text-brand hover:bg-brand/20 transition-all duration-200 font-medium flex items-center gap-2"
+            >
+              <MapIcon className="w-3 h-3" />
+              Explore Segments
             </button>
             <button
               onClick={() => mapRef.current?.toggleQuality()}
@@ -254,8 +261,8 @@ export default function Dashboard() {
                 mapState.useColors !== false ? 'bg-brand text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              <Palette className="w-4 h-4" />
-              {mapState.useColors !== false ? 'Colors ON' : 'Colors OFF'}
+              <Eye className="w-4 h-4" />
+              {mapState.useColors !== false ? 'Colors: ON' : 'Colors: OFF'}
             </button>
             <button
               onClick={() => mapRef.current?.syncActivities()}
@@ -326,7 +333,10 @@ export default function Dashboard() {
               unit="hrs"
               loading={statsLoading}
             />
-            <StatCard label="Segments Saved" icon={MapIcon} value={stats?.total_segments_saved} loading={statsLoading} />
+            <div className="flex flex-col gap-1">
+              <StatCard label="Segments Saved" icon={MapIcon} value={stats?.total_segments_saved} loading={statsLoading} />
+              {stats?.segments_note && <div className="text-[10px] text-gray-400 leading-tight px-1">{stats.segments_note}</div>}
+            </div>
           </div>
 
           {/* Sync status indicator */}
@@ -369,7 +379,7 @@ export default function Dashboard() {
               <h3 className="font-semibold text-gray-700 mb-4">Road Quality Distribution</h3>
               {statsLoading ? (
                 <Skeleton className="h-48 w-full" />
-              ) : pieData.length > 0 ? (
+              ) : stats?.scored_segments > 0 && pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie
@@ -388,8 +398,8 @@ export default function Dashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-48 flex items-center justify-center text-sm text-gray-400">
-                  No scored segments. Click "Road Quality" on the Map.
+                <div className="h-48 flex items-center justify-center text-sm text-gray-400 text-center">
+                  Score roads first — click Road Quality on the Map
                 </div>
               )}
             </div>
@@ -402,7 +412,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
               </div>
-            ) : stats?.top_segments?.length > 0 ? (
+            ) : stats?.scored_segments > 0 && stats?.top_segments?.length > 0 ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-400 text-xs uppercase tracking-wide border-b">
@@ -425,7 +435,7 @@ export default function Dashboard() {
               </table>
             ) : (
               <div className="text-center text-gray-400 py-8 text-sm">
-                No scored segments yet. Click "Road Quality" on the Map to start scoring.
+                Score roads first — click Road Quality on the Map
               </div>
             )}
           </div>

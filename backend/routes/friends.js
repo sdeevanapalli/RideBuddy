@@ -17,78 +17,77 @@ router.get('/routes', async (req, res) => {
   try {
     const token = await refreshUserToken(req.user.userId)
 
-    const followingResp = await fetch(
-      'https://www.strava.com/api/v3/athlete/following?per_page=10',
+    const activitiesResp = await fetch(
+      'https://www.strava.com/api/v3/athlete/activities?per_page=30',
       { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }
     )
 
-    if (!followingResp.ok) return res.json([])
+    if (!activitiesResp.ok) return res.json({ message: "No friend activities found in your Strava feed" })
 
-    const following = await followingResp.json()
-    if (!Array.isArray(following) || !following.length) return res.json([])
+    const activities = await activitiesResp.json()
+    if (!Array.isArray(activities) || !activities.length) {
+      return res.json({ message: "No friend activities found in your Strava feed" })
+    }
 
     const scoredSegments = getScoredSegments()
     const allRoutes = []
 
-    for (const athlete of following.slice(0, 10)) {
-      await sleep(200)
-      try {
-        const activitiesResp = await fetch(
-          `https://www.strava.com/api/v3/athletes/${athlete.id}/activities?per_page=5`,
-          { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }
-        )
-        if (!activitiesResp.ok) continue
-        const activities = await activitiesResp.json()
-        if (!Array.isArray(activities)) continue
+    for (const act of activities) {
+      // If we can determine the athlete is the user, we can optionally skip it.
+      // Since the feed might only be user's activities or include friends,
+      // we'll process them all, but assume we want to skip user's own if athlete_id is known.
+      const athleteId = act.athlete?.id
+      if (athleteId && String(athleteId) === String(req.user.userId)) continue
 
-        for (const act of activities) {
-          const encoded = act.map && act.map.summary_polyline
-          if (!encoded) continue
+      const encoded = act.map && act.map.summary_polyline
+      if (!encoded) continue
 
-          let decoded
-          try { decoded = polylineLib.decode(encoded) } catch (_) { continue }
+      let decoded
+      try { decoded = polylineLib.decode(encoded) } catch (_) { continue }
 
-          const lats = decoded.map(([lat]) => lat)
-          const lngs = decoded.map(([, lng]) => lng)
-          const bbox = {
-            minLat: Math.min(...lats), maxLat: Math.max(...lats),
-            minLng: Math.min(...lngs), maxLng: Math.max(...lngs),
-          }
+      const lats = decoded.map(([lat]) => lat)
+      const lngs = decoded.map(([, lng]) => lng)
+      const bbox = {
+        minLat: Math.min(...lats), maxLat: Math.max(...lats),
+        minLng: Math.min(...lngs), maxLng: Math.max(...lngs),
+      }
 
-          const overlapping = scoredSegments.filter((seg) => {
-            if (!seg.polyline) return false
-            try {
-              const sd = polylineLib.decode(seg.polyline)
-              const midIdx = Math.floor(sd.length / 2)
-              const [midLat, midLng] = sd[midIdx]
-              return midLat >= bbox.minLat && midLat <= bbox.maxLat &&
-                     midLng >= bbox.minLng && midLng <= bbox.maxLng
-            } catch (_) { return false }
-          })
+      const overlapping = scoredSegments.filter((seg) => {
+        if (!seg.polyline) return false
+        try {
+          const sd = polylineLib.decode(seg.polyline)
+          const midIdx = Math.floor(sd.length / 2)
+          const [midLat, midLng] = sd[midIdx]
+          return midLat >= bbox.minLat && midLat <= bbox.maxLat &&
+                 midLng >= bbox.minLng && midLng <= bbox.maxLng
+        } catch (_) { return false }
+      })
 
-          const avgQuality = overlapping.length > 0
-            ? overlapping.reduce((s, x) => s + x.quality_score, 0) / overlapping.length
-            : 0
+      const avgQuality = overlapping.length > 0
+        ? overlapping.reduce((s, x) => s + x.quality_score, 0) / overlapping.length
+        : 0
 
-          const actDate = act.start_date ? new Date(act.start_date) : null
-          const ageMs = actDate ? Date.now() - actDate.getTime() : Infinity
-          const recency = Math.max(0, 1 - ageMs / (7 * 24 * 3600 * 1000))
-          const rankScore = recency * 0.4 + (avgQuality / 100) * 0.6
+      const actDate = act.start_date ? new Date(act.start_date) : null
+      const ageMs = actDate ? Date.now() - actDate.getTime() : Infinity
+      const recency = Math.max(0, 1 - ageMs / (7 * 24 * 3600 * 1000))
+      const rankScore = recency * 0.4 + (avgQuality / 100) * 0.6
 
-          allRoutes.push({
-            athlete_id: athlete.id,
-            athlete_name: `${athlete.firstname || ''} ${athlete.lastname || ''}`.trim(),
-            athlete_avatar: athlete.profile_medium || null,
-            activity_id: act.id,
-            activity_name: act.name || 'Activity',
-            distance: act.distance || 0,
-            start_date: act.start_date || null,
-            polyline: encoded,
-            quality_signal: Math.round(avgQuality),
-            rank_score: rankScore,
-          })
-        }
-      } catch (_) {}
+      allRoutes.push({
+        athlete_id: athleteId || 'unknown',
+        athlete_name: act.athlete ? `${act.athlete.firstname || ''} ${act.athlete.lastname || ''}`.trim() : 'Friend',
+        athlete_avatar: act.athlete?.profile_medium || null,
+        activity_id: act.id,
+        activity_name: act.name || 'Activity',
+        distance: act.distance || 0,
+        start_date: act.start_date || null,
+        polyline: encoded,
+        quality_signal: Math.round(avgQuality),
+        rank_score: rankScore,
+      })
+    }
+
+    if (!allRoutes.length) {
+      return res.json({ message: "No friend activities found in your Strava feed" })
     }
 
     allRoutes.sort((a, b) => b.rank_score - a.rank_score)

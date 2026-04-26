@@ -24,6 +24,7 @@ router.get('/stats', (req, res) => {
     const segmentStats = db.prepare(`
       SELECT
         COUNT(*) as total_segments_saved,
+        COUNT(quality_score) as scored_segments,
         COALESCE(ROUND(AVG(quality_score), 1), 0) as avg_quality_score,
         COALESCE(ROUND(100.0 * SUM(CASE WHEN quality_score >= 80 THEN 1 ELSE 0 END) / NULLIF(COUNT(quality_score), 0), 1), 0) as pct_green,
         COALESCE(ROUND(100.0 * SUM(CASE WHEN quality_score >= 50 AND quality_score < 80 THEN 1 ELSE 0 END) / NULLIF(COUNT(quality_score), 0), 1), 0) as pct_yellow,
@@ -61,6 +62,7 @@ router.get('/stats', (req, res) => {
       ...segmentStats,
       weekly_distance: weeklyDistance,
       top_segments: topSegments,
+      segments_note: "Segments are saved globally as you explore the map",
     })
   } catch (err) {
     console.error('Error in GET /api/dashboard/stats:', err)

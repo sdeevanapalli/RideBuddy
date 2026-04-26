@@ -10,6 +10,7 @@ const activitiesRouter = require('./routes/activities');
 const dashboardRouter = require('./routes/dashboard');
 const suggestionsRouter = require('./routes/suggestions');
 const friendsRouter = require('./routes/friends');
+const plannerRouter = require('./routes/planner');
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use('/api/activities', activitiesRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/suggestions', suggestionsRouter);
 app.use('/api/friends', friendsRouter);
+app.use('/api/planner', plannerRouter);
 app.use('/auth', authRouter);
 
 // Debug endpoint — no auth required, returns raw table counts for diagnosing data-pipeline issues
