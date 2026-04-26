@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import MapView from '../components/MapView'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -72,7 +72,13 @@ const PIE_COLORS = ['#00c853', '#ffb300', '#d50000']
 
 export default function Dashboard() {
   const { isAuthenticated } = useAuth()
-  const navigate = useNavigate()
+
+  const mapRef = useRef(null)
+  const [mapState, setMapState] = useState({
+    showCoverage: false, showQuality: false, syncing: false,
+    syncStatus: null, syncResult: null, scoringRoads: false,
+  })
+  const handleMapStateUpdate = useCallback((s) => setMapState(s), [])
 
   const [activeTab, setActiveTab] = useState('overview')
 
@@ -155,8 +161,8 @@ export default function Dashboard() {
   }
 
   function showOnMap(polyline, color = 'purple') {
-    sessionStorage.setItem('ridebuddy_highlight', JSON.stringify({ polyline, color }))
-    navigate('/')
+    mapRef.current?.highlight(polyline, color)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   if (!isAuthenticated) {
@@ -179,6 +185,62 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto w-full p-6 space-y-6">
+      {/* Map + Controls */}
+      {isAuthenticated && (
+        <div className="bg-white rounded-xl shadow flex overflow-hidden" style={{ height: 380 }}>
+          <div className="flex-1 min-w-0">
+            <MapView ref={mapRef} onStateUpdate={handleMapStateUpdate} />
+          </div>
+          <div className="w-52 flex-shrink-0 border-l border-gray-100 p-4 flex flex-col gap-3">
+            <h3 className="font-semibold text-gray-700 text-sm">Map Controls</h3>
+            <button
+              onClick={() => mapRef.current?.findRoutes()}
+              className="w-full text-left px-3 py-2 rounded-lg text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors font-medium"
+            >
+              Find Routes
+            </button>
+            <button
+              onClick={() => mapRef.current?.toggleQuality()}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                mapState.showQuality ? 'bg-green-100 text-green-700' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {mapState.scoringRoads ? 'Scoring…' : mapState.showQuality ? 'Quality ON' : 'Road Quality'}
+            </button>
+            <button
+              onClick={() => mapRef.current?.toggleCoverage()}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                mapState.showCoverage ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {mapState.showCoverage ? 'Coverage ON' : 'My Coverage'}
+            </button>
+            <button
+              onClick={() => mapRef.current?.syncActivities()}
+              disabled={mapState.syncing}
+              className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+            >
+              {mapState.syncing ? 'Syncing…' : 'Sync Activities'}
+            </button>
+            <div className="mt-auto text-xs text-gray-400 space-y-1">
+              {mapState.syncStatus?.last_synced && (
+                <div>
+                  Last sync:{' '}
+                  {new Date(mapState.syncStatus.last_synced).toLocaleDateString(undefined, {
+                    month: 'short', day: 'numeric',
+                  })}
+                </div>
+              )}
+              {mapState.syncResult && !mapState.syncing && (
+                mapState.syncResult.error
+                  ? <div className="text-red-500">Error: {mapState.syncResult.error}</div>
+                  : <div className="text-green-600">Synced {mapState.syncResult.synced ?? 0} rides</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-gray-200">
         {[

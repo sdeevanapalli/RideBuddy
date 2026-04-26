@@ -43,7 +43,11 @@ export default function App() {
           <NavBar />
           <main className="flex-1 flex flex-col">
             <Routes>
-              <Route path="/" element={<MapView />} />
+              <Route path="/" element={
+                <div style={{ height: 'calc(100vh - 64px)' }}>
+                  <MapView />
+                </div>
+              } />
               <Route path="/dashboard" element={<Dashboard />} />
             </Routes>
           </main>
