@@ -412,7 +412,7 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
           <Polyline key={`cov-${i}`} positions={c.coords} pathOptions={{ color: "#3b82f6", opacity: 0.5, weight: 2 }} />
         ))}
 
-        {/* Quality Layer */}
+        {/* Quality Layer (Disabled for now)
         {showQuality && qualityData?.map((q, i) => {
           const { name, quality_score, avg_speed, effort_count, avg_grade, distance } = q.properties
           const color = qualityColor(quality_score)
@@ -437,6 +437,7 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
             </Polyline>
           )
         })}
+        */}
 
         {/* Segments Layer */}
         {segments?.map((s, i) => {
@@ -664,7 +665,7 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
         </div>
       )}
 
-      {/* Quality Legend */}
+      {/* Quality Legend (Disabled for now)
       {showQuality && (
         <div className="absolute bottom-3 right-3 bg-white p-3 rounded-lg shadow-md text-xs z-[1000]">
           <div className="font-semibold mb-1.5 text-gray-900">Road Quality</div>
@@ -684,6 +685,7 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
           ))}
         </div>
       )}
+      */}
     </div>
   )
 })

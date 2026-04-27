@@ -237,6 +237,7 @@ export default function Dashboard() {
               <MapIcon className="w-3 h-3" />
               Explore Segments
             </button>
+            {/* Road Quality Toggle (Disabled for now)
             <button
               onClick={() => mapRef.current?.toggleQuality()}
               className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
@@ -246,6 +247,7 @@ export default function Dashboard() {
               <BarChart2 className="w-4 h-4" />
               {mapState.scoringRoads ? 'Scoring…' : mapState.showQuality ? 'Quality ON' : 'Road Quality'}
             </button>
+            */}
             <button
               onClick={() => mapRef.current?.toggleCoverage()}
               className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
@@ -375,6 +377,7 @@ export default function Dashboard() {
               )}
             </div>
 
+            {/* Road Quality Distribution (Disabled for now)
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="font-semibold text-gray-700 mb-4">Road Quality Distribution</h3>
               {statsLoading ? (
@@ -403,9 +406,10 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+            */}
           </div>
 
-          {/* Top segments table */}
+          {/* Top segments table (Disabled for now)
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="font-semibold text-gray-700 mb-4">Top Segments by Quality</h3>
             {statsLoading ? (
@@ -439,6 +443,7 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+          */}
 
           {/* Suggestions */}
           <div className="bg-white rounded-lg shadow-sm p-6">
