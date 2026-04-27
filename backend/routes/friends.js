@@ -32,12 +32,16 @@ router.get('/routes', async (req, res) => {
     const scoredSegments = getScoredSegments()
     const allRoutes = []
 
+    const { getDB } = require('../lib/db')
+    const userRow = getDB().prepare('SELECT strava_id FROM users WHERE id = ?').get(req.user.userId)
+    const myStravaId = userRow ? String(userRow.strava_id) : null
+
     for (const act of activities) {
       // If we can determine the athlete is the user, we can optionally skip it.
       // Since the feed might only be user's activities or include friends,
       // we'll process them all, but assume we want to skip user's own if athlete_id is known.
       const athleteId = act.athlete?.id
-      if (athleteId && String(athleteId) === String(req.user.userId)) continue
+      if (athleteId && String(athleteId) === myStravaId) continue
 
       const encoded = act.map && act.map.summary_polyline
       if (!encoded) continue

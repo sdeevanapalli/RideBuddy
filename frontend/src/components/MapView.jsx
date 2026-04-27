@@ -34,7 +34,7 @@ function decodePolyline(str) {
 }
 
 function qualityColor(score) {
-  if (score === null || score === undefined) return '#9ca3af'
+  if (score === null || score === undefined) return '#64748b'
   if (score >= 80) return '#00c853'
   if (score >= 50) return '#ffb300'
   return '#d50000'
@@ -395,7 +395,7 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          url={useColors ? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"}
         />
 
         <FitBounds 
@@ -409,13 +409,13 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
 
         {/* Coverage Layer */}
         {showCoverage && coverageData?.map((c, i) => (
-          <Polyline key={`cov-${i}`} positions={c.coords} pathOptions={{ color: useColors ? '#3b82f6' : '#ffffff', opacity: 0.5, weight: 2 }} />
+          <Polyline key={`cov-${i}`} positions={c.coords} pathOptions={{ color: "#3b82f6", opacity: 0.5, weight: 2 }} />
         ))}
 
         {/* Quality Layer */}
         {showQuality && qualityData?.map((q, i) => {
           const { name, quality_score, avg_speed, effort_count, avg_grade, distance } = q.properties
-          const color = useColors ? qualityColor(quality_score) : '#ffffff'
+          const color = qualityColor(quality_score)
           const distKm = distance ? (distance / 1000).toFixed(2) : '?'
           const speedKmh = avg_speed ? (avg_speed * 3.6).toFixed(1) : 'N/A'
           const scoreStr = quality_score != null
@@ -444,7 +444,7 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
           const distKm = (s.distance / 1000).toFixed(2)
           return (
             <React.Fragment key={`seg-${s.id || i}`}>
-              <Polyline positions={[s.start_latlng, s.end_latlng]} pathOptions={{ color: useColors ? '#2563eb' : '#ffffff', weight: 4 }} />
+              <Polyline positions={[s.start_latlng, s.end_latlng]} pathOptions={{ color: "#2563eb", weight: 4 }} />
               <Marker position={s.start_latlng}>
                 <Popup>
                   <div style={{ minWidth: '200px', fontFamily: 'sans-serif' }}>
@@ -467,14 +467,14 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
 
         {/* Highlight Layer */}
         {highlightData && (
-          <Polyline positions={highlightData.coords} pathOptions={{ color: useColors ? highlightData.color : '#ffffff', weight: 5, opacity: 0.9 }} />
+          <Polyline positions={highlightData.coords} pathOptions={{ color: highlightData.color, weight: 5, opacity: 0.9 }} />
         )}
 
         {/* Planned Route Layer */}
         {plannedRoute && (
           <>
             <Polyline 
-              positions={plannedRoute.waypoints.map(wp => [wp.lat, wp.lng])} 
+              positions={plannedRoute.path_coords || plannedRoute.waypoints.map(wp => [wp.lat, wp.lng])} 
               pathOptions={{ color: '#ec4899', weight: 4, dashArray: '8, 8' }} 
             />
             {plannedRoute.waypoints.map((wp, i) => (
@@ -665,14 +665,14 @@ const MapView = forwardRef(function MapView({ onStateUpdate }, ref) {
       )}
 
       {/* Quality Legend */}
-      {showQuality && useColors && (
+      {showQuality && (
         <div className="absolute bottom-3 right-3 bg-white p-3 rounded-lg shadow-md text-xs z-[1000]">
           <div className="font-semibold mb-1.5 text-gray-900">Road Quality</div>
           {[
             { color: '#00c853', label: 'Smooth', range: '80–100' },
             { color: '#ffb300', label: 'Moderate', range: '50–79' },
             { color: '#d50000', label: 'Rough', range: '0–49' },
-            { color: '#9ca3af', label: 'No data', range: '' },
+            { color: '#64748b', label: 'No data', range: '' },
           ].map(({ color, label, range }) => (
             <div key={label} className="flex items-center gap-1.5 mb-1">
               <span className="inline-block rounded" style={{ width: 16, height: 4, background: color }} />

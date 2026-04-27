@@ -25,7 +25,7 @@ function formatDist(meters) {
 }
 
 function qualityColor(score) {
-  if (score == null) return '#9ca3af'
+  if (score == null) return '#64748b'
   if (score >= 80) return '#00c853'
   if (score >= 50) return '#ffb300'
   return '#d50000'
